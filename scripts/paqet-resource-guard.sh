@@ -101,13 +101,24 @@ if command -v pmap >/dev/null 2>&1; then
     )
 fi
 
+# The optimized Paqet build used during the reproduced incident logs
+# "reconnected successfully" after a successful health-triggered reconnect.
+# Recording this alongside resource counts lets us correlate reconnect churn
+# with packet-resource growth without changing the Paqet process itself.
+ACTIVE_ENTER_TIMESTAMP="$(systemctl show "$SERVICE" -p ActiveEnterTimestamp --value 2>/dev/null || true)"
+RECONNECTS=0
+if command -v journalctl >/dev/null 2>&1 && [[ -n "$ACTIVE_ENTER_TIMESTAMP" ]]; then
+    RECONNECTS="$(journalctl -u "$SERVICE" --since "$ACTIVE_ENTER_TIMESTAMP" --no-pager 2>/dev/null | grep -c 'reconnected successfully' || true)"
+    RECONNECTS="${RECONNECTS:-0}"
+fi
+
 BREACH_REASONS=()
 (( PACKET_SOCKETS >= PACKET_SOCKET_THRESHOLD )) && BREACH_REASONS+=("packet_sockets=$PACKET_SOCKETS>=$PACKET_SOCKET_THRESHOLD")
 (( RSS_KB >= RSS_KB_THRESHOLD )) && BREACH_REASONS+=("rss_kb=$RSS_KB>=$RSS_KB_THRESHOLD")
 (( THREADS >= THREAD_THRESHOLD )) && BREACH_REASONS+=("threads=$THREADS>=$THREAD_THRESHOLD")
 (( FD_COUNT >= FD_THRESHOLD )) && BREACH_REASONS+=("fds=$FD_COUNT>=$FD_THRESHOLD")
 
-log "METRICS service=$SERVICE pid=$PID packet_sockets=$PACKET_SOCKETS mappings_8m=$MAPPINGS_8M mappings_8m_rss_kb=$MAPPINGS_8M_RSS_KB fds=$FD_COUNT threads=$THREADS rss_kb=$RSS_KB action=$ACTION"
+log "METRICS service=$SERVICE pid=$PID reconnects=$RECONNECTS packet_sockets=$PACKET_SOCKETS mappings_8m=$MAPPINGS_8M mappings_8m_rss_kb=$MAPPINGS_8M_RSS_KB fds=$FD_COUNT threads=$THREADS rss_kb=$RSS_KB action=$ACTION"
 
 if (( ${#BREACH_REASONS[@]} == 0 )); then
     exit 0
@@ -125,6 +136,8 @@ SNAPSHOT="$LOG_DIR/${SAFE_SERVICE}-${STAMP}.log"
     echo "timestamp=$(date --iso-8601=seconds)"
     echo "service=$SERVICE"
     echo "pid=$PID"
+    echo "active_enter_timestamp=$ACTIVE_ENTER_TIMESTAMP"
+    echo "reconnects=$RECONNECTS"
     echo "breach=${BREACH_REASONS[*]}"
     echo "packet_sockets=$PACKET_SOCKETS"
     echo "mappings_8m=$MAPPINGS_8M"
