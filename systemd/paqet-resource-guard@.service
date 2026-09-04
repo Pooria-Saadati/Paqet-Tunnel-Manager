@@ -1,0 +1,22 @@
+[Unit]
+Description=Paqet resource leak guard for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PAQET_GUARD_ACTION=restart
+Environment=PAQET_GUARD_PACKET_SOCKET_THRESHOLD=32
+Environment=PAQET_GUARD_RSS_KB_THRESHOLD=524288
+Environment=PAQET_GUARD_THREAD_THRESHOLD=64
+Environment=PAQET_GUARD_FD_THRESHOLD=128
+Environment=PAQET_GUARD_COOLDOWN_SECONDS=600
+ExecStart=/usr/local/libexec/paqet-resource-guard %i
+
+# This unit intentionally needs access to /proc, systemctl and the network
+# namespace in order to inspect and restart the target Paqet service.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log/paqet-resource-guard /run/paqet-resource-guard /run/systemd
