@@ -13,10 +13,15 @@ Environment=PAQET_GUARD_FD_THRESHOLD=128
 Environment=PAQET_GUARD_COOLDOWN_SECONDS=600
 ExecStart=/usr/local/libexec/paqet-resource-guard %i
 
-# This unit intentionally needs access to /proc, systemctl and the network
-# namespace in order to inspect and restart the target Paqet service.
+RuntimeDirectory=paqet-resource-guard
+RuntimeDirectoryMode=0750
+LogsDirectory=paqet-resource-guard
+LogsDirectoryMode=0750
+
+# This unit intentionally needs access to /proc and systemd in order to inspect
+# and, only after an explicit threshold breach, restart the target Paqet unit.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=/var/log/paqet-resource-guard /run/paqet-resource-guard /run/systemd
+ReadWritePaths=/var/log/paqet-resource-guard /run/paqet-resource-guard
