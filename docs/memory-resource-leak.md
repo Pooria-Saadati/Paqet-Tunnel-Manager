@@ -52,9 +52,36 @@ RSS: 167,640 KiB -> 175,680 KiB
 
 That single event added one PACKET socket, one ~8,040 KiB mapping, two FDs and ~8,040 KiB process RSS.
 
+## Three-tunnel control comparison
+
+The Iran host runs three Paqet clients with the same custom core. Report-only guard samples taken within the same minute produced:
+
+| Tunnel | Reconnects | PACKET sockets | ~8 MiB mappings | mapped RSS | FDs | Threads | RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Finland | 61 | 22 | 22 | 176,880 KiB | 51 | 27 | 200,572 KiB |
+| Germany | 0 | 8 | 8 | 64,320 KiB | 23 | 12 | 83,088 KiB |
+| Italy | 0 | 8 | 8 | 64,320 KiB | 23 | 13 | 80,928 KiB |
+
+Germany and Italy independently establish an empirical healthy baseline of 8 PACKET sockets, 8 packet mappings and 23 FDs for the current configuration/build.
+
+Compared with that baseline, Finland had:
+
+```text
++14 PACKET sockets
++14 ~8 MiB mappings
++112,560 KiB mapped RSS  (14 * 8,040 KiB)
++28 FDs                  (2 per extra packet resource)
++14 to +15 threads
+~117 to ~120 MiB additional process RSS
+```
+
+This is strong evidence that the Finland reconnect path is associated with outstanding packet resources. It does **not** prove that every reconnect permanently leaks a resource; earlier samples show delayed cleanup can reduce the outstanding count. The relevant failure condition is sustained net accumulation/backlog.
+
+The baseline count of 8 is also consistent with the configured connection count of 4 and a send/receive packet-handle pair per connection, but the guard does not depend on that implementation assumption.
+
 ## Reconnect correlation
 
-The affected optimized build logged 54 successful reconnects since the current service activation while the guard observed 19-20 outstanding PACKET sockets/mappings. Recent journal data repeatedly showed the sequence:
+The affected optimized build logged repeated successful reconnects while the guard observed elevated outstanding PACKET sockets/mappings. Recent journal data repeatedly showed the sequence:
 
 ```text
 health check failed (1/4)
@@ -122,7 +149,7 @@ FDs >= 128
 Cooldown = 10 minutes
 ```
 
-These thresholds are intentionally conservative relative to the reproduced failure state and should be tuned after testing on multiple hosts.
+With the observed healthy PACKET baseline of 8, a threshold of 32 allows transient cleanup backlog while still acting far below the previously observed 128-socket / ~1 GiB failure state.
 
 ## Install the guard for one existing service
 
@@ -155,18 +182,24 @@ sudo PAQET_GUARD_ACTION=report \
   paqet-finland01-1331-6000.service
 ```
 
-Then enable the five-minute guard timer:
+The systemd template instance is the target unit name **without** the `.service` suffix. Enable the five-minute guard timer only for Finland with:
 
 ```bash
 sudo systemctl enable --now \
-  paqet-resource-guard@paqet-finland01-1331-6000.service.timer
+  paqet-resource-guard@paqet-finland01-1331-6000.timer
 ```
+
+The guard service then invokes the target `paqet-finland01-1331-6000.service`.
 
 Inspect it with:
 
 ```bash
 systemctl status \
-  paqet-resource-guard@paqet-finland01-1331-6000.service.timer
+  paqet-resource-guard@paqet-finland01-1331-6000.timer
+
+journalctl -u \
+  paqet-resource-guard@paqet-finland01-1331-6000.service \
+  --no-pager
 
 journalctl -t paqet-resource-guard --since today
 
@@ -177,8 +210,10 @@ Disable it with:
 
 ```bash
 sudo systemctl disable --now \
-  paqet-resource-guard@paqet-finland01-1331-6000.service.timer
+  paqet-resource-guard@paqet-finland01-1331-6000.timer
 ```
+
+Do not enable the timer for Germany or Italy during the Finland A/B test. They are useful control tunnels.
 
 ## A/B validation for a new core
 
@@ -194,4 +229,4 @@ Threads
 RSS/PSS
 ```
 
-The test should be performed first on the problematic Finland tunnel, with the same connection count and MTU where possible, so the core version is the primary changed variable.
+The test should be performed first on the problematic Finland tunnel, with the same connection count and MTU where possible, so the core version is the primary changed variable. Germany and Italy should remain unchanged as controls during the test.
