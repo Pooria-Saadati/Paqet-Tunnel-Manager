@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Paqet resource leak guard for %i every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=paqet-resource-guard@%i.service
+
+[Install]
+WantedBy=timers.target
