@@ -11,7 +11,7 @@ Environment=PAQET_GUARD_RSS_KB_THRESHOLD=524288
 Environment=PAQET_GUARD_THREAD_THRESHOLD=64
 Environment=PAQET_GUARD_FD_THRESHOLD=128
 Environment=PAQET_GUARD_COOLDOWN_SECONDS=600
-ExecStart=/usr/local/libexec/paqet-resource-guard %i
+ExecStart=/usr/local/libexec/paqet-resource-guard %i.service
 
 RuntimeDirectory=paqet-resource-guard
 RuntimeDirectoryMode=0750
